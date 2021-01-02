@@ -1,0 +1,71 @@
+version: '3.5'
+
+services:
+    server:
+        environment:
+            - POSTGRES_URL=postgresql://postgres:postgres@postgres/postgres
+        build: .
+        entrypoint:
+            - python
+            - main.py
+        tty: true
+        stdin_open: true
+        ports:
+            - '8000:8000'
+        volumes:
+            - .:/code
+        depends_on:
+            - postgres
+
+    postgres:
+        image: postgres:13
+        ports:
+        - "5432:5432"
+        environment:
+        - POSTGRES_USER=postgres
+        - POSTGRES_PASSWORD=postgres
+        - POSTGRES_DB=postgres
+
+    pgadmin:
+      container_name: pgadmin
+      image: dpage/pgadmin4
+      environment:
+        - PGADMIN_DEFAULT_EMAIL=pgadmin4@pgadmin.org
+        - PGADMIN_DEFAULT_PASSWORD=admin
+      ports:
+        - "5050:80"
+      depends_on:
+        - postgres
+
+    vernemq:
+        environment:
+            - DOCKER_VERNEMQ_ACCEPT_EULA=yes
+            - DOCKER_VERNEMQ_ALLOW_ANONYMOUS=on
+            - MQTT_TOPIC=thndr-trading
+        image: erlio/docker-vernemq
+
+    streamer:
+        environment:
+            - MQTT_HOST=vernemq
+            - MQTT_PORT=1883
+            - MQTT_TOPIC=thndr-trading
+        image: thndr/streamer:0.2
+        depends_on:
+            - vernemq
+
+
+    worker:
+        environment:
+            - MQTT_HOST=vernemq
+            - MQTT_PORT=1883
+            - MQTT_TOPIC=thndr-trading
+            - POSTGRES_URL=postgresql://postgres:postgres@postgres/postgres
+        build: .
+        entrypoint:
+            - python
+            - worker.py
+        volumes:
+            - .:/code
+        depends_on:
+            - postgres
+            - vernemq
